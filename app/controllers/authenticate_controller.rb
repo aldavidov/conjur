@@ -78,16 +78,6 @@ class AuthenticateController < ApplicationController
     handle_login_error(e)
   end
 
-  def authenticate(input = authenticator_input)
-    authn_token = Authentication::Authenticate.new.(
-      authenticator_input: input,
-      authenticators: installed_authenticators,
-      enabled_authenticators: Authentication::InstalledAuthenticators.enabled_authenticators_str
-    )
-    render_authn_token(authn_token)
-  rescue => e
-    handle_authentication_error(e)
-  end
 
   def authenticate_jwt
     params[:authenticator] = "authn-jwt"
@@ -123,8 +113,19 @@ class AuthenticateController < ApplicationController
     authenticate(input)
   end
 
+  def authenticate(input = authenticator_input)
+    authn_token = Authentication::Authenticate.new.(
+      authenticator_input: input,
+        authenticators: installed_authenticators,
+        enabled_authenticators: Authentication::InstalledAuthenticators.enabled_authenticators_str
+    )
+    render_authn_token(authn_token)
+  rescue => e
+    handle_authentication_error(e)
+  end
+
   def authenticator_input
-    Authentication::AuthenticatorInput.new(
+    @authenticator_input ||= Authentication::AuthenticatorInput.new(
       authenticator_name: params[:authenticator],
       service_id: params[:service_id],
       account: params[:account],
@@ -198,6 +199,7 @@ class AuthenticateController < ApplicationController
 
   def handle_authentication_error(err)
     authentication_error = LogMessages::Authentication::AuthenticationError.new(err.inspect)
+    audit_authn_error(authentication_error)
     logger.info(authentication_error)
     log_backtrace(err)
 
@@ -221,6 +223,20 @@ class AuthenticateController < ApplicationController
     else
       raise Unauthorized
     end
+  end
+
+  def audit_authn_error(err)
+    authn_info = authenticator_input
+    Audit.logger.log(
+      ::Audit::Event::Authn::Authenticate.new(
+        authenticator_name: authn_info.authenticator_name,
+        service: authn_info.webservice,
+        role_id: authn_info.audit_role_id,
+        client_ip: authn_info.client_ip,
+        success: false,
+        error_message: err.message
+      )
+    )
   end
 
   def log_backtrace(err)

@@ -29,7 +29,6 @@ module Authentication
       audit_success
       new_token
     rescue => e
-      audit_failure(e)
       raise e
     end
 
@@ -81,19 +80,6 @@ module Authentication
           client_ip: client_ip,
           success: true,
           error_message: nil
-        )
-      )
-    end
-
-    def audit_failure(err)
-      @audit_log.log(
-        ::Audit::Event::Authn::Authenticate.new(
-          authenticator_name: authenticator_name,
-          service: webservice,
-          role_id: audit_role_id,
-          client_ip: client_ip,
-          success: false,
-          error_message: err.message
         )
       )
     end

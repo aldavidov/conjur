@@ -24,7 +24,6 @@ module Authentication
         install_signed_cert
         audit_success
       rescue => e
-        audit_failure(e)
         raise e
       end
 
@@ -172,19 +171,6 @@ module Authentication
             client_ip: @client_ip,
             success: true,
             error_message: nil
-          )
-        )
-      end
-
-      def audit_failure(err)
-        @audit_log.log(
-          Audit::Event::Authn::InjectClientCert.new(
-            authenticator_name: AUTHENTICATOR_NAME,
-            service: webservice,
-            role_id: sanitized_role_id,
-            client_ip: @client_ip,
-            success: false,
-            error_message: err.message
           )
         )
       end
