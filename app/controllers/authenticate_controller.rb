@@ -132,7 +132,7 @@ class AuthenticateController < ApplicationController
     )
   rescue => e
     handle_authentication_error(e)
-    audit_authn_error(e)
+    audit_error(e)
   else
     authenticate(input)
   end
@@ -143,10 +143,10 @@ class AuthenticateController < ApplicationController
       authenticators: installed_authenticators,
       enabled_authenticators: Authentication::InstalledAuthenticators.enabled_authenticators_str
     )
-    audit_authn_success
+    audit_success
     render_authn_token(authn_token)
   rescue => e
-    audit_authn_error(e)
+    audit_error(e)
     handle_authentication_error(e)
   end
 
@@ -207,6 +207,46 @@ class AuthenticateController < ApplicationController
 
   private
 
+  def audit_success
+    log_audit_event(
+      ::Audit::Event::Authn::Authenticate.new(
+        authenticator_name: authenticator_input.authenticator_name,
+        service: authenticator_input.webservice,
+        role_id: audit_role_id,
+        client_ip: authenticator_input.client_ip,
+        success: true,
+        error_message: nil
+      )
+    )
+  end
+
+  def audit_error(err)
+    log_audit_event(
+      ::Audit::Event::Authn::Authenticate.new(
+        authenticator_name: authenticator_input.authenticator_name,
+        service: authenticator_input.webservice,
+        role_id: audit_role_id,
+        client_ip: authenticator_input.client_ip,
+        success: false,
+        error_message: err.message
+      )
+    )
+  end
+
+  def audit_role_id
+    ::Audit::Event::Authn::RoleId.new(
+      role: authenticator_input.role,
+      account: authenticator_input.account,
+      username: authenticator_input.username
+    ).to_s
+  end
+
+  def log_audit_event(audit_event)
+    Audit.logger.log(
+      audit_event
+    )
+  end
+
   def handle_login_error(err)
     login_error = LogMessages::Authentication::LoginError.new(err.inspect)
     logger.info(login_error)
@@ -248,46 +288,6 @@ class AuthenticateController < ApplicationController
     else
       raise Unauthorized
     end
-  end
-
-  def audit_authn_error(err)
-    log_audit_event(
-      ::Audit::Event::Authn::Authenticate.new(
-        authenticator_name: authenticator_input.authenticator_name,
-        service: authenticator_input.webservice,
-        role_id: audit_role_id,
-        client_ip: authenticator_input.client_ip,
-        success: false,
-        error_message: err.message
-      )
-    )
-  end
-
-  def audit_authn_success
-    log_audit_event(
-      ::Audit::Event::Authn::Authenticate.new(
-        authenticator_name: authenticator_input.authenticator_name,
-        service: authenticator_input.webservice,
-        role_id: audit_role_id,
-        client_ip: authenticator_input.client_ip,
-        success: true,
-        error_message: nil
-      )
-    )
-  end
-
-  def log_audit_event(audit_event)
-    Audit.logger.log(
-      audit_event
-    )
-  end
-
-  def audit_role_id
-    ::Audit::Event::Authn::RoleId.new(
-      role: authenticator_input.role,
-      account: authenticator_input.account,
-      username: authenticator_input.username
-    ).to_s
   end
 
   def log_backtrace(err)
