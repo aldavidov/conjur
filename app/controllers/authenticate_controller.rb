@@ -53,14 +53,14 @@ class AuthenticateController < ApplicationController
       username: ::Role.username_from_roleid(current_user.role_id),
       enabled: body_params['enabled'] || false
     )
-    log_audit_event(update_authn_config_audit_event)
+    log_audit_event(update_config_audit_event)
     head(:no_content)
   rescue => e
-    log_audit_event(update_authn_config_audit_error_event(e))
+    log_audit_event(update_config_audit_err_event(e))
     handle_authentication_error(e)
   end
 
-  def update_authn_config_audit_event
+  def update_config_audit_event
     ::Audit::Event::Authn::UpdateAuthenticatorConfig.new(
       authenticator_name: authenticator_name,
       service: webservice,
@@ -71,7 +71,7 @@ class AuthenticateController < ApplicationController
     )
   end
 
-  def update_authn_config_audit_error_event(err)
+  def update_config_audit_err_event(err)
     ::Audit::Event::Authn::UpdateAuthenticatorConfig.new(
       authenticator_name: authenticator_name,
       service: webservice,
@@ -104,7 +104,7 @@ class AuthenticateController < ApplicationController
   def authenticate_jwt
     params[:authenticator] = "authn-jwt"
     authn_token = Authentication::AuthnJwt::OrchestrateAuthentication.new.call(
-      authenticator_input: authenticator_input_without_credentials,
+      authenticator_input: authn_input_headers,
       enabled_authenticators: Authentication::InstalledAuthenticators.enabled_authenticators_str
     )
     render_authn_token(authn_token)
@@ -120,7 +120,7 @@ class AuthenticateController < ApplicationController
     )
   rescue => e
     handle_authentication_error(e)
-    audit_authn_error(e)
+    audit_error(e)
   else
     authenticate(input)
   end
@@ -162,10 +162,11 @@ class AuthenticateController < ApplicationController
     )
   end
 
-  # create authenticator input without reading the request body
-  # request body can be relatively large
+  # Creates an authenticator input object
+  # excluding the credentials in the request body.
+  # Request body can be relatively large
   # authenticator will read it after basic validation check
-  def authenticator_input_without_credentials
+  def authn_input_headers
     Authentication::AuthenticatorInput.new(
       authenticator_name: params[:authenticator],
       service_id: params[:service_id],
