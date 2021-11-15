@@ -23,7 +23,7 @@ class AuthenticateController < ApplicationController
   def status
     Authentication::ValidateStatus.new.(
       authenticator_status_input: status_input,
-        enabled_authenticators: Authentication::InstalledAuthenticators.enabled_authenticators_str
+      enabled_authenticators: Authentication::InstalledAuthenticators.enabled_authenticators_str
     )
     render(json: { status: "ok" })
   rescue => e
@@ -48,10 +48,10 @@ class AuthenticateController < ApplicationController
 
     Authentication::UpdateAuthenticatorConfig.new.(
       account: params[:account],
-        authenticator_name: params[:authenticator],
-        service_id: params[:service_id],
-        username: ::Role.username_from_roleid(current_user.role_id),
-        enabled: body_params['enabled'] || false
+      authenticator_name: params[:authenticator],
+      service_id: params[:service_id],
+      username: ::Role.username_from_roleid(current_user.role_id),
+      enabled: body_params['enabled'] || false
     )
 
     head(:no_content)
@@ -121,6 +121,18 @@ class AuthenticateController < ApplicationController
     render_authn_token(authn_token)
   rescue => e
     handle_authentication_error(e)
+  end
+
+  def authenticator_input
+    @authenticator_input ||= Authentication::AuthenticatorInput.new(
+      authenticator_name: params[:authenticator],
+      service_id: params[:service_id],
+      account: params[:account],
+      username: params[:id],
+      credentials: request.body.read,
+      client_ip: request.ip,
+      request: request
+    )
   end
 
   # create authenticator input without reading the request body
@@ -222,18 +234,6 @@ class AuthenticateController < ApplicationController
         success: false,
         error_message: err.message
       )
-    )
-  end
-
-  def authenticator_input
-    @authenticator_input ||= Authentication::AuthenticatorInput.new(
-      authenticator_name: params[:authenticator],
-      service_id: params[:service_id],
-      account: params[:account],
-      username: params[:id],
-      credentials: request.body.read,
-      client_ip: request.ip,
-      request: request
     )
   end
 
