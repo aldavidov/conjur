@@ -270,7 +270,7 @@ class AuthenticateController < ApplicationController
         service: authenticator_input.webservice,
         role_id: audit_role_id,
         client_ip: authenticator_input.client_ip,
-        success: true ,
+        success: true,
         error_message: nil
       )
     )
@@ -309,16 +309,17 @@ class AuthenticateController < ApplicationController
       error: error.inspect
     }
 
-    status_code = case error
-                  when Errors::Authentication::Security::RoleNotAuthorizedOnResource
-                    :forbidden
-                  when Errors::Authentication::StatusNotSupported
-                    :not_implemented
-                  when Errors::Authentication::AuthenticatorNotSupported
-                    :not_found
-                  else
-                    :internal_server_error
-                  end
+    status_code =
+      case error
+        when Errors::Authentication::Security::RoleNotAuthorizedOnResource
+          :forbidden
+        when Errors::Authentication::StatusNotSupported
+          :not_implemented
+        when Errors::Authentication::AuthenticatorNotSupported
+          :not_found
+        else
+          :internal_server_error
+      end
 
     { json: payload, status: status_code }
   end
