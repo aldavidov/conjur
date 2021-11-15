@@ -10,7 +10,7 @@ describe Commands::Credentials::ChangePassword do
 
   let(:audit_log) { double(::Audit.logger)}
   
-  let(:audit_authn_success) do
+  let(:audit_success) do
     ::Audit::Event::Password.new(
       user_id: role.id,
       client_ip: client_ip,
