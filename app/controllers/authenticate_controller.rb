@@ -311,14 +311,14 @@ class AuthenticateController < ApplicationController
 
     status_code =
       case error
-        when Errors::Authentication::Security::RoleNotAuthorizedOnResource
-          :forbidden
-        when Errors::Authentication::StatusNotSupported
-          :not_implemented
-        when Errors::Authentication::AuthenticatorNotSupported
-          :not_found
-        else
-          :internal_server_error
+      when Errors::Authentication::Security::RoleNotAuthorizedOnResource
+        :forbidden
+      when Errors::Authentication::StatusNotSupported
+        :not_implemented
+      when Errors::Authentication::AuthenticatorNotSupported
+        :not_found
+      else
+        :internal_server_error
       end
 
     { json: payload, status: status_code }
