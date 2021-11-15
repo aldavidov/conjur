@@ -23,7 +23,7 @@ class AuthenticateController < ApplicationController
   def status
     Authentication::ValidateStatus.new.(
       authenticator_status_input: status_input,
-      enabled_authenticators: Authentication::InstalledAuthenticators.enabled_authenticators_str
+        enabled_authenticators: Authentication::InstalledAuthenticators.enabled_authenticators_str
     )
     render(json: { status: "ok" })
   rescue => e
@@ -48,10 +48,10 @@ class AuthenticateController < ApplicationController
 
     Authentication::UpdateAuthenticatorConfig.new.(
       account: params[:account],
-      authenticator_name: params[:authenticator],
-      service_id: params[:service_id],
-      username: ::Role.username_from_roleid(current_user.role_id),
-      enabled: body_params['enabled'] || false
+        authenticator_name: params[:authenticator],
+        service_id: params[:service_id],
+        username: ::Role.username_from_roleid(current_user.role_id),
+        enabled: body_params['enabled'] || false
     )
 
     head(:no_content)
@@ -77,7 +77,6 @@ class AuthenticateController < ApplicationController
   rescue => e
     handle_login_error(e)
   end
-
 
   def authenticate_jwt
     params[:authenticator] = "authn-jwt"
@@ -116,24 +115,12 @@ class AuthenticateController < ApplicationController
   def authenticate(input = authenticator_input)
     authn_token = Authentication::Authenticate.new.(
       authenticator_input: input,
-        authenticators: installed_authenticators,
-        enabled_authenticators: Authentication::InstalledAuthenticators.enabled_authenticators_str
+      authenticators: installed_authenticators,
+      enabled_authenticators: Authentication::InstalledAuthenticators.enabled_authenticators_str
     )
     render_authn_token(authn_token)
   rescue => e
     handle_authentication_error(e)
-  end
-
-  def authenticator_input
-    @authenticator_input ||= Authentication::AuthenticatorInput.new(
-      authenticator_name: params[:authenticator],
-      service_id: params[:service_id],
-      account: params[:account],
-      username: params[:id],
-      credentials: request.body.read,
-      client_ip: request.ip,
-      request: request
-    )
   end
 
   # create authenticator input without reading the request body
@@ -226,17 +213,36 @@ class AuthenticateController < ApplicationController
   end
 
   def audit_authn_error(err)
-    authn_info = authenticator_input
     Audit.logger.log(
       ::Audit::Event::Authn::Authenticate.new(
-        authenticator_name: authn_info.authenticator_name,
-        service: authn_info.webservice,
-        role_id: authn_info.audit_role_id,
-        client_ip: authn_info.client_ip,
+        authenticator_name: authenticator_input.authenticator_name,
+        service: authenticator_input.webservice,
+        role_id: audit_role_id,
+        client_ip: authenticator_input.client_ip,
         success: false,
         error_message: err.message
       )
     )
+  end
+
+  def authenticator_input
+    @authenticator_input ||= Authentication::AuthenticatorInput.new(
+      authenticator_name: params[:authenticator],
+      service_id: params[:service_id],
+      account: params[:account],
+      username: params[:id],
+      credentials: request.body.read,
+      client_ip: request.ip,
+      request: request
+    )
+  end
+
+  def audit_role_id
+    ::Audit::Event::Authn::RoleId.new(
+      role: authenticator_input.role,
+      account: authenticator_input.account,
+      username: authenticator_input.username
+    ).to_s
   end
 
   def log_backtrace(err)
@@ -267,7 +273,7 @@ class AuthenticateController < ApplicationController
                     :not_found
                   else
                     :internal_server_error
-    end
+                  end
 
     { json: payload, status: status_code }
   end
