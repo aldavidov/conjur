@@ -26,7 +26,6 @@ module Authentication
       validate_user_has_access_to_webservice
       validate_origin
       validate_credentials
-      audit_success
       new_token
     rescue => e
       raise e
@@ -69,25 +68,6 @@ module Authentication
         username: username,
         client_ip: client_ip
       )
-    end
-
-    def audit_success
-      @audit_log.log(
-        ::Audit::Event::Authn::Authenticate.new(
-          authenticator_name: authenticator_name,
-          service: webservice,
-          role_id: audit_role_id,
-          client_ip: client_ip,
-          success: true,
-          error_message: nil
-        )
-      )
-    end
-
-    def audit_role_id
-      ::Audit::Event::Authn::RoleId.new(
-        role: role, account: account, username: username
-      ).to_s
     end
 
     def new_token

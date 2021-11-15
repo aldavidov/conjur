@@ -25,11 +25,9 @@ class AuthenticateController < ApplicationController
       authenticator_status_input: status_input,
       enabled_authenticators: Authentication::InstalledAuthenticators.enabled_authenticators_str
     )
-    audit_success
     render(json: { status: "ok" })
   rescue => e
     log_backtrace(e)
-    audit_authn_error(e)
     render(status_failure_response(e))
   end
 
@@ -55,11 +53,33 @@ class AuthenticateController < ApplicationController
       username: ::Role.username_from_roleid(current_user.role_id),
       enabled: body_params['enabled'] || false
     )
-
+    log_audit_event(update_authn_config_audit_event)
     head(:no_content)
   rescue => e
-    audit_authn_error(err)
+    log_audit_event(update_authn_config_audit_error_event(e))
     handle_authentication_error(e)
+  end
+
+  def update_authn_config_audit_event
+    ::Audit::Event::Authn::UpdateAuthenticatorConfig.new(
+      authenticator_name: authenticator_name,
+      service: webservice,
+      role_id: audit_role_id,
+      client_ip: client_ip,
+      success: true,
+      error_message: nil
+    )
+  end
+
+  def update_authn_config_audit_error_event(err)
+    ::Audit::Event::Authn::UpdateAuthenticatorConfig.new(
+      authenticator_name: authenticator_name,
+      service: webservice,
+      role_id: audit_role_id,
+      client_ip: client_ip,
+      success: false,
+      error_message: err.message
+    )
   end
 
   def status_input
@@ -123,8 +143,8 @@ class AuthenticateController < ApplicationController
       authenticators: installed_authenticators,
       enabled_authenticators: Authentication::InstalledAuthenticators.enabled_authenticators_str
     )
+    audit_authn_success
     render_authn_token(authn_token)
-    audit_success
   rescue => e
     audit_authn_error(e)
     handle_authentication_error(e)
@@ -181,7 +201,6 @@ class AuthenticateController < ApplicationController
       host_id_prefix: request.headers["Host-Id-Prefix"]
     )
     head(:accepted)
-    audit_success
   rescue => e
     handle_authentication_error(e)
   end
@@ -232,23 +251,34 @@ class AuthenticateController < ApplicationController
   end
 
   def audit_authn_error(err)
-    authenticate_audit_event(err)
-  end
-
-  def audit_success
-    Audit.logger.log(
-      authenticate_audit_event(nil)
+    log_audit_event(
+      ::Audit::Event::Authn::Authenticate.new(
+        authenticator_name: authenticator_input.authenticator_name,
+        service: authenticator_input.webservice,
+        role_id: audit_role_id,
+        client_ip: authenticator_input.client_ip,
+        success: false,
+        error_message: err.message
+      )
     )
   end
 
-  def authenticate_audit_event(err)
-    ::Audit::Event::Authn::Authenticate.new(
-      authenticator_name: authenticator_input.authenticator_name,
-      service: authenticator_input.webservice,
-      role_id: audit_role_id,
-      client_ip: authenticator_input.client_ip,
-      success: err == nil,
-      error_message: err
+  def audit_authn_success
+    log_audit_event(
+      ::Audit::Event::Authn::Authenticate.new(
+        authenticator_name: authenticator_input.authenticator_name,
+        service: authenticator_input.webservice,
+        role_id: audit_role_id,
+        client_ip: authenticator_input.client_ip,
+        success: true ,
+        error_message: nil
+      )
+    )
+  end
+
+  def log_audit_event(audit_event)
+    Audit.logger.log(
+      audit_event
     )
   end
 
