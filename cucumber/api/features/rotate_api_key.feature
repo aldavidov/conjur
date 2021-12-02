@@ -73,7 +73,7 @@ Feature: Rotate the API key of a role
 
   Scenario: Bob's access token CAN NOT be used to rotate own API key using role parameter with self role value
     Given I login as "bob"
-    When I PUT "/authn/cucumber/api_key?role=user:bob"
+    When I PUT "/authn-oidc/cucumber/api_key?role=user:bob"
     Then the HTTP response status code is 401
 
   # A user without update permission rotating Bob's API key
