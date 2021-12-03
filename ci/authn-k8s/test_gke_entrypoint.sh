@@ -150,48 +150,8 @@ function pushDockerImages() {
 function launchConjurMaster() {
   echo 'Launching Conjur master service'
 
-  sed -e \
-    "s#{{ CONJUR_AUTHN_K8S_TAG }}#$CONJUR_AUTHN_K8S_TAG#g" \
-      dev/dev_conjur.${TEMPLATE_TAG}yaml |
-    sed -e "s#{{ CONJUR_TEST_AUTHN_K8S_TAG }}#$CONJUR_TEST_AUTHN_K8S_TAG#g" |
-    sed -e "s#{{ DATA_KEY }}#$(openssl rand -base64 32)#g" |
-    sed -e "s#{{ CONJUR_AUTHN_K8S_TEST_NAMESPACE }}#$CONJUR_AUTHN_K8S_TEST_NAMESPACE#g" |
-    kubectl create -f -
+  run_conjur_master "dev_conjur"
 
-  # Turn off -e since we expect failures when retrieving pod before it's ready.
-  set +e
-
-  local num_tries=0
-  local max_tries=20
-  local pod_retrieved=false
-
-  while [[ $num_tries -lt $max_tries ]]; do
-    echo "Try $num_tries of $max_tries to retrieve pod conjur-authn-k8s..."
-
-    if conjur_pod=$(retrieve_pod conjur-authn-k8s); then
-      echo "Success!"
-      pod_retrieved=true
-      break
-    fi
-
-    sleep 5
-    (( num_tries++ ))
-  done
-
-  if [[ $pod_retrieved != true ]]; then
-    echo "Unable to retrieve pod.  Exiting..."
-    exit 1
-  fi
-
-  set -e
-
-  kubectl wait --for=condition=Ready "pod/$conjur_pod" --timeout=5m
-
-  # wait for the 'conjurctl server' entrypoint to finish
-  local wait_command="while ! curl --silent --head --fail \
-    localhost:80 > /dev/null; do sleep 1; done"
-  kubectl exec "$conjur_pod" -- bash -c "$wait_command"
-  
   API_KEY=$(
     kubectl exec "$conjur_pod" -- \
       conjurctl account create cucumber | tail -n 1 | awk '{ print $NF }'
@@ -254,6 +214,59 @@ function runTests() {
 
   conjurcmd mkdir -p /opt/conjur-server/output
 
+  run_cucumber "~@skip --tags ~@k8s_skip --tags ~@sni_fails --tags ~@sni_success"
+}
+
+retrieve_pod() {
+  kubectl get pods -l "app=$1" -o=jsonpath='{.items[].metadata.name}'
+}
+
+function run_conjur_master() {
+  sed -e \
+    "s#{{ CONJUR_AUTHN_K8S_TAG }}#$CONJUR_AUTHN_K8S_TAG#g" \
+      dev/dev_conjur.${TEMPLATE_TAG}yaml |
+    sed -e "s#{{ CONJUR_TEST_AUTHN_K8S_TAG }}#$CONJUR_TEST_AUTHN_K8S_TAG#g" |
+    sed -e "s#{{ DATA_KEY }}#$(openssl rand -base64 32)#g" |
+    sed -e "s#{{ CONJUR_AUTHN_K8S_TEST_NAMESPACE }}#$CONJUR_AUTHN_K8S_TEST_NAMESPACE#g" |
+    kubectl create -f -
+
+  # Turn off -e since we expect failures when retrieving pod before it's ready.
+  set +e
+
+  local num_tries=0
+  local max_tries=20
+  local pod_retrieved=false
+
+  while [[ $num_tries -lt $max_tries ]]; do
+    echo "Try $num_tries of $max_tries to retrieve pod conjur-authn-k8s..."
+
+    if conjur_pod=$(retrieve_pod conjur-authn-k8s); then
+      echo "Success!"
+      pod_retrieved=true
+      break
+    fi
+
+    sleep 5
+    (( num_tries++ ))
+  done
+
+  if [[ $pod_retrieved != true ]]; then
+    echo "Unable to retrieve pod.  Exiting..."
+    exit 1
+  fi
+
+  set -e
+
+  kubectl wait --for=condition=Ready "pod/$conjur_pod" --timeout=5m
+
+  # wait for the 'conjurctl server' entrypoint to finish
+  local wait_command="while ! curl --silent --head --fail \
+    localhost:80 > /dev/null; do sleep 1; done"
+  kubectl exec "$conjur_pod" -- bash -c "$wait_command"
+}
+
+function run_cucumber() {
+  tags=$1
   echo "./bin/cucumber \
     K8S_VERSION=1.7 \
     PLATFORM=kubernetes \
@@ -263,11 +276,7 @@ function runTests() {
     -r ./cucumber/kubernetes/features/support/world.rb \
     -r ./cucumber/kubernetes/features/support/hooks.rb \
     -r ./cucumber/kubernetes/features/support/conjur_token.rb \
-    --tags ~@skip ./cucumber/kubernetes/features" | cucumbercmd -i bash
-}
-
-retrieve_pod() {
-  kubectl get pods -l "app=$1" -o=jsonpath='{.items[].metadata.name}'
+    --tags $tags ./cucumber/kubernetes/features" | cucumbercmd -i bash || true
 }
 
 main
