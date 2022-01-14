@@ -11,12 +11,27 @@ class AuthenticatorsController < RestController
 
   # TODO: This endpoint (& host initialization) should return a 422 on no valid JSON body.
   def initialize_auth
-    loaded_policy = _initialize_auth
+    loaded_policy = Authentication::PersistAuthFactory.new_from_authenticator(params[:authenticator]).(
+      conjur_account: params[:account],
+      service_id: params[:service_id],
+      resource: find_or_create_root_policy,
+      current_user: current_user,
+      client_ip: request.ip,
+      raw_post: request.raw_post
+    )
     render(body: loaded_policy, content_type: "text/yaml", status: :created)
   end
 
   def initialize_auth_host
-    loaded_policy = _initialize_auth_host
+    loaded_policy = Authentication::PersistAuthHost.new.(
+      conjur_account: params[:account],
+      service_id: params[:service_id],
+      authenticator: params[:authenticator],
+      resource: find_or_create_root_policy,
+      current_user: current_user,
+      client_ip: request.ip,
+      host_data: host_details
+    )
     render(body: loaded_policy, content_type: "text/yaml", status: :created)
   end
 
@@ -28,59 +43,8 @@ class AuthenticatorsController < RestController
 
   private
 
-  def _initialize_auth
-    case params[:authenticator]
-    when "authn-k8s"
-      initialize_specific_auth(Authentication::AuthnK8s::K8sAuthenticatorData, Authentication::AuthnK8s::InitializeK8sAuth)
-    when "authn-azure"
-      initialize_specific_auth(Authentication::AuthnAzure::AzureAuthenticatorData)
-    when "authn-oidc"
-      initialize_specific_auth(Authentication::AuthnOidc::OidcAuthenticatorData)
-    else
-      raise ArgumentError, "Not implemented for authenticator %s" % params[:authenticator]
-    end
-  end
-
-  def _initialize_auth_host
-    case params[:authenticator]
-    when "authn-k8s"
-      initialize_specific_auth_host(constraints: Authentication::AuthnK8s::Restrictions::CONSTRAINTS)
-    when "authn-oidc"
-      initialize_specific_auth_host
-    when "authn-azure"
-      initialize_specific_auth_host(constraints: Authentication::AuthnAzure::Restrictions::CONSTRAINTS)
-    else
-      raise ArgumentError, "Not implemented for authenticator %s" % params[:authenticator]
-    end
-
-  end
-
-  def initialize_specific_auth_host(constraints: nil)
-    host_data = Authentication::AuthHostDetails.new(request.raw_post, constraints: constraints)
-
-    Authentication::InitializeAuthHost.new.(
-      conjur_account: params[:account],
-      service_id: params[:service_id],
-      authenticator: params[:authenticator],
-      resource: find_or_create_root_policy,
-      current_user: current_user,
-      client_ip: request.ip,
-      host_data: host_data
-    )
-  end
-
-  def initialize_specific_auth(auth_dataclass, auth_initializer=Authentication::Default::InitializeDefaultAuth)
-    auth_data = auth_dataclass.new(request.raw_post)
-    Authentication::PersistAuth.new(
-      auth_initializer: auth_initializer.new
-    ).(
-      conjur_account: params[:account],
-      service_id: params[:service_id],
-      resource: find_or_create_root_policy,
-      current_user: current_user,
-      client_ip: request.ip,
-      auth_data: auth_data
-    )
+  def host_details
+    Authentication::AuthHostDetailsFactory.new_from_authenticator(params[:authenticator], request.raw_post)
   end
 
   def retry_delay
