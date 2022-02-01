@@ -46,6 +46,7 @@ main() {
 
   init_data_key
   init_audit_service
+  init_metrics_service
 
   # Install gems, create DB, and create cucumber account.
   docker-compose up -d --no-deps "${services[@]}"
@@ -101,6 +102,8 @@ Usage: start [options]
 
     --audit         Starts with the audit engine and database enabled
 
+    --metrics       Starts a Prometheus container to scrape the /metrics endpoint
+
     -h, --help      Shows this help message.
 EOF
   exit
@@ -119,6 +122,7 @@ parse_options() {
       --oidc-okta ) ENABLE_OIDC_OKTA=true ; shift ;;
       --rotators ) ENABLE_ROTATORS=true ; shift ;;
       --audit ) ENABLE_AUDIT=true ; shift ;;
+      --metrics ) ENABLE_METRICS=true ; shift ;;
       -h | --help ) print_help ; shift ;;
        * )
          if [ -z "$1" ]; then
@@ -276,6 +280,12 @@ init_audit_service() {
   if [[ $ENABLE_AUDIT == true ]]; then
     services+=(audit)
     export AUDIT_DATABASE_URL=postgres://postgres@audit
+  fi
+}
+
+init_metrics_service() {
+  if [[ $ENABLE_METRICS = true ]]; then
+    services+=(prometheus pg-prometheus-exporter node-exporter grafana)
   fi
 }
 
